@@ -1,3 +1,13 @@
+use reqwest::blocking::Client;
+
 fn main() {
-    println!("Hello, world!");
+    let request = Client::new()
+        .get("https://port19.xyz");
+
+    let result = request.send();
+
+    match result {
+        Ok(response) => println!("{}", response.status()),
+        Err(_err) => todo!(),
+    }
 }
