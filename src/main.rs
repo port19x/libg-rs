@@ -1,4 +1,30 @@
 //use fuzzy_select::FuzzySelect;
+use unhtml::FromHtml;
+
+
+#[derive(FromHtml)]
+#[html(selector = ".c > tbody:nth-child(1)")]
+struct SearchTable {
+    //path e.g. .c > tbody:nth-child(1) > tr:nth-child(1)
+    #[html(selector = "tr > td")]
+    entries: Vec<SearchResult>,
+}
+
+// <tr valign=top bgcolor=#C6DEFF><td>58419</td>
+#[derive(FromHtml)]
+#[html(selector = "> td")]
+struct SearchResult {
+    #[html(selector = ":nth-child(1)")]
+    author: String,
+    title: String,
+    publisher: String,
+    year: String,
+    pages: String,
+    language: String,
+    size: String,
+    filetype: String,
+    dl_link: String,
+}
 
 fn libgsearch (endpoint:&str) -> Result<String, reqwest::Error> {
     // enpoint := what comes after the / of the url. e.g.: https://libgen.rs/enpoint has the endpoint /enpoint
@@ -13,8 +39,10 @@ fn main() {
     let x = libgsearch("harry");
     let y = match x {
         Ok(y) => y,
-        Err(y) => todo!(),
+        Err(_y) => todo!(),
     };
+
+    let r1 = SearchTable::from_html(&y);
 
     println!("{}", y);
 
