@@ -23,7 +23,7 @@ fn main() {
     let select_rows = Selector::parse("tr").unwrap();
     //Note: skip1 to skip the table header that is unfortunately not marked via <th>
     let mut row_iterator = search_table.select(&select_rows).skip(1);
-    let row1 = row_iterator.next().unwrap().inner_html().to_string();
+    let row1 = row_iterator.next().unwrap().html();
 
     println!("{:#?}", row1);
 
