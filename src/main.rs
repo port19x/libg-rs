@@ -1,5 +1,5 @@
 //use fuzzy_select::FuzzySelect;
-use scraper::{Html, Selector};
+use scraper::{ElementRef, Html, Selector};
 
 fn libgsearch (endpoint:&str) -> Result<String, reqwest::Error> {
     // enpoint := what comes after the / of the url. e.g.: https://libgen.rs/enpoint has the endpoint /enpoint
@@ -24,6 +24,21 @@ struct SearchResult {
     dl_link: String,
 }
 
+fn tr_to_searchresult (tr:ElementRef) -> SearchResult {
+    return SearchResult {
+        id:          tr.child_elements().nth(0).unwrap().inner_html().to_string(),
+        author:      tr.child_elements().nth(1).unwrap().inner_html().to_string(), //TODO
+        title:       tr.child_elements().nth(2).unwrap().inner_html().to_string(), //TODO
+        publisher:   tr.child_elements().nth(3).unwrap().inner_html().to_string(),
+        year:        tr.child_elements().nth(4).unwrap().inner_html().to_string(),
+        pages:       tr.child_elements().nth(5).unwrap().inner_html().to_string(),
+        language:    tr.child_elements().nth(6).unwrap().inner_html().to_string(),
+        file_size:   tr.child_elements().nth(7).unwrap().inner_html().to_string(),
+        file_format: tr.child_elements().nth(8).unwrap().inner_html().to_string(),
+        dl_link:     tr.child_elements().nth(9).unwrap().inner_html().to_string(), //TODO
+    };
+}
+
 fn main() {
     let x = libgsearch("harry");
     let y = match x {
@@ -37,24 +52,9 @@ fn main() {
     let select_rows = Selector::parse("tr").unwrap();
     //Note: skip1 to skip the table header that is unfortunately not marked via <th>
     let mut row_iterator = search_table.select(&select_rows).skip(1);
-    let row1 = row_iterator.next().unwrap();
+    let mut rowstructs = row_iterator.map(tr_to_searchresult);
 
-    println!("{:#?}", row1);
-
-    let sr1 = SearchResult {
-        id:          row1.child_elements().nth(0).unwrap().inner_html().to_string(),
-        author:      row1.child_elements().nth(1).unwrap().inner_html().to_string(), //TODO
-        title:       row1.child_elements().nth(2).unwrap().inner_html().to_string(), //TODO
-        publisher:   row1.child_elements().nth(3).unwrap().inner_html().to_string(),
-        year:        row1.child_elements().nth(4).unwrap().inner_html().to_string(),
-        pages:       row1.child_elements().nth(5).unwrap().inner_html().to_string(),
-        language:    row1.child_elements().nth(6).unwrap().inner_html().to_string(),
-        file_size:   row1.child_elements().nth(7).unwrap().inner_html().to_string(),
-        file_format: row1.child_elements().nth(8).unwrap().inner_html().to_string(),
-        dl_link:     row1.child_elements().nth(9).unwrap().inner_html().to_string(), //TODO
-    };
-
-    println!("{:#?}", sr1);
+    println!("{:#?}", rowstructs.nth(0));
 
     // Fuzzy_select How To
     // let options = vec!["vanilla", "strawberry", "chocolate"];
