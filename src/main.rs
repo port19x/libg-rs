@@ -3,26 +3,32 @@ use unhtml::FromHtml;
 
 
 #[derive(FromHtml)]
-#[html(selector = ".c > tbody:nth-child(1)")]
 struct SearchTable {
     //path e.g. .c > tbody:nth-child(1) > tr:nth-child(1)
-    #[html(selector = "tr > td")]
+    #[html(selector = ".c > tbody:nth-child(1) > tr > td")]
     entries: Vec<SearchResult>,
 }
 
 // <tr valign=top bgcolor=#C6DEFF><td>58419</td>
 #[derive(FromHtml)]
-#[html(selector = "> td")]
 struct SearchResult {
-    #[html(selector = ":nth-child(1)")]
+    #[html(selector = "td:nth-child(1)")]
     author: String,
+    #[html(selector = "td:nth-child(1)")]
     title: String,
+    #[html(selector = "td:nth-child(1)")]
     publisher: String,
+    #[html(selector = "td:nth-child(1)")]
     year: String,
+    #[html(selector = "td:nth-child(1)")]
     pages: String,
+    #[html(selector = "td:nth-child(1)")]
     language: String,
+    #[html(selector = "td:nth-child(1)")]
     size: String,
+    #[html(selector = "td:nth-child(1)")]
     filetype: String,
+    #[html(selector = "td:nth-child(1)")]
     dl_link: String,
 }
 
