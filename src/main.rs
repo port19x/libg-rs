@@ -17,11 +17,15 @@ fn main() {
         Err(_y) => todo!(),
     };
     let document = Html::parse_document(&y);
-    let selector = Selector::parse(".c").unwrap();
-    let search_table = document.select(&selector);
-    //let main_table = document.select()
+    let toplevel_selector = Selector::parse(".c > tbody").unwrap();
+    let search_table = document.select(&toplevel_selector).next().unwrap();
 
-    println!("{:#?}", search_table);
+    let select_rows = Selector::parse("tr").unwrap();
+    //Note: skip1 to skip the table header that is unfortunately not marked via <th>
+    let mut row_iterator = search_table.select(&select_rows).skip(1);
+    let row1 = row_iterator.next().unwrap().inner_html().to_string();
+
+    println!("{:#?}", row1);
 
     // Fuzzy_select How To
     // let options = vec!["vanilla", "strawberry", "chocolate"];
