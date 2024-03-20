@@ -5,30 +5,35 @@ use unhtml::FromHtml;
 #[derive(FromHtml)]
 struct SearchTable {
     //path e.g. .c > tbody:nth-child(1) > tr:nth-child(1)
-    #[html(selector = ".c > tbody:nth-child(1) > tr > td")]
+    #[html(attr="valign")]
     entries: Vec<SearchResult>,
 }
 
 // <tr valign=top bgcolor=#C6DEFF><td>58419</td>
 #[derive(FromHtml)]
 struct SearchResult {
-    #[html(selector = "td:nth-child(1)")]
+    #[html(selector = "tr:nth-child(1)", attr = "inner")]
+    id: i32,
+    #[html(selector = "tr:nth-child(2)", attr = "inner")]
+    //TODO This no workey because stupid hrefs
     author: String,
-    #[html(selector = "td:nth-child(1)")]
+    #[html(selector = "tr:nth-child(3)", attr = "inner")]
+    //TODO Again no workey....
     title: String,
-    #[html(selector = "td:nth-child(1)")]
+    #[html(selector = "tr:nth-child(4)", attr = "inner")]
     publisher: String,
-    #[html(selector = "td:nth-child(1)")]
-    year: String,
-    #[html(selector = "td:nth-child(1)")]
-    pages: String,
-    #[html(selector = "td:nth-child(1)")]
+    #[html(selector = "tr:nth-child(5)", attr = "inner")]
+    year: i32,
+    #[html(selector = "tr:nth-child(6)", attr = "inner")]
+    pages: i32,
+    #[html(selector = "tr:nth-child(7)", attr = "inner")]
     language: String,
-    #[html(selector = "td:nth-child(1)")]
-    size: String,
-    #[html(selector = "td:nth-child(1)")]
-    filetype: String,
-    #[html(selector = "td:nth-child(1)")]
+    #[html(selector = "tr:nth-child(8)", attr = "inner")]
+    file_size: String,
+    #[html(selector = "tr:nth-child(9)", attr = "inner")]
+    file_format: String,
+    #[html(selector = "tr:nth-child(10)", attr = "inner")]
+    //TODO deal with lé href again
     dl_link: String,
 }
 
