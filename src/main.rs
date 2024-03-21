@@ -44,10 +44,24 @@ fn libgsearch (searchterm:&str) -> Vec<SearchResult> {
     let rowstructs = row_iterator.map(tr_to_searchresult).collect();
     return rowstructs;
 }
+// -> Vec<String> 
+fn libglinks (dl_page:&str) -> String {
+    let response = reqwest::blocking::get(dl_page).unwrap().error_for_status().unwrap().text().unwrap();
+    let document = Html::parse_document(&response);
+    let toplevel_selector = Selector::parse("#download").unwrap();
+    let toplevel_div = document.select(&toplevel_selector).next().unwrap();
+
+    // let link_selector = Selector::parse("[href]").unwrap();
+    // let links = toplevel_div.select(&link_selector).next().unwrap();
+    return toplevel_div.descendent_elements().nth(2).unwrap().attr("href").unwrap().to_string();
+}
 
 fn main() {
     let x = libgsearch("harry");
-    println!("{:#?}", x);
+    //println!("{:#?}", x);
+    let y = libglinks("http://library.lol/main/9FEFB4BD34BD272768E7D409D66C582E");
+    println!("{:#?}", y);
+
 
     // Fuzzy_select How To
     // let options = vec!["vanilla", "strawberry", "chocolate"];
