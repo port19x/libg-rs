@@ -12,7 +12,7 @@ struct SearchResult {
     language: String,
     file_size: String,
     file_format: String,
-    dl_link: String,
+    dl_page: String,
 }
 
 fn tr_to_searchresult (tr:ElementRef) -> SearchResult {
@@ -26,7 +26,7 @@ fn tr_to_searchresult (tr:ElementRef) -> SearchResult {
         language:    tr.child_elements().nth(6).unwrap().inner_html().to_string(),
         file_size:   tr.child_elements().nth(7).unwrap().inner_html().to_string(),
         file_format: tr.child_elements().nth(8).unwrap().inner_html().to_string(),
-        dl_link:     tr.child_elements().nth(9).unwrap().inner_html().to_string(), //TODO
+        dl_page:     tr.child_elements().nth(9).unwrap().inner_html().to_string(), //TODO
     };
 }
 
