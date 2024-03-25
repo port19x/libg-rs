@@ -16,17 +16,18 @@ struct SearchResult {
 }
 
 fn tr_to_searchresult (tr:ElementRef) -> SearchResult {
+    let a = Selector::parse("a").unwrap();
     return SearchResult {
         id:          tr.child_elements().nth(0).unwrap().inner_html().to_string(),
-        author:      tr.child_elements().nth(1).unwrap().inner_html().to_string(), //TODO
-        title:       tr.child_elements().nth(2).unwrap().inner_html().to_string(), //TODO
+        author:      tr.child_elements().nth(1).unwrap().select(&a).next().unwrap().inner_html().to_string(),
+        title:       tr.child_elements().nth(2).unwrap().select(&a).next().unwrap().text().next().unwrap().to_string(),
         publisher:   tr.child_elements().nth(3).unwrap().inner_html().to_string(),
         year:        tr.child_elements().nth(4).unwrap().inner_html().to_string(),
         pages:       tr.child_elements().nth(5).unwrap().inner_html().to_string(),
         language:    tr.child_elements().nth(6).unwrap().inner_html().to_string(),
         file_size:   tr.child_elements().nth(7).unwrap().inner_html().to_string(),
         file_format: tr.child_elements().nth(8).unwrap().inner_html().to_string(),
-        dl_page:     tr.child_elements().nth(9).unwrap().inner_html().to_string(), //TODO
+        dl_page:     tr.child_elements().nth(9).unwrap().select(&a).next().unwrap().attr("href").unwrap().to_string(),
     };
 }
 
@@ -44,23 +45,20 @@ fn libgsearch (searchterm:&str) -> Vec<SearchResult> {
     let rowstructs = row_iterator.map(tr_to_searchresult).collect();
     return rowstructs;
 }
-// -> Vec<String> 
+
 fn libglinks (dl_page:&str) -> String {
     let response = reqwest::blocking::get(dl_page).unwrap().error_for_status().unwrap().text().unwrap();
     let document = Html::parse_document(&response);
     let toplevel_selector = Selector::parse("#download").unwrap();
     let toplevel_div = document.select(&toplevel_selector).next().unwrap();
-
-    // let link_selector = Selector::parse("[href]").unwrap();
-    // let links = toplevel_div.select(&link_selector).next().unwrap();
     return toplevel_div.descendent_elements().nth(2).unwrap().attr("href").unwrap().to_string();
 }
 
 fn main() {
-    let x = libgsearch("harry");
-    //println!("{:#?}", x);
-    let y = libglinks("http://library.lol/main/9FEFB4BD34BD272768E7D409D66C582E");
-    println!("{:#?}", y);
+    let x = "harry";
+    let y = &libgsearch(x)[0];
+    let z = libglinks(&y.dl_page);
+    println!("{:#?}", z);
 
 
     // Fuzzy_select How To
