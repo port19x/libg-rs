@@ -18,19 +18,24 @@ struct SearchResult {
     dl_page: String,
 }
 
-fn tr_to_searchresult (tr:ElementRef) -> SearchResult {
+fn tr_to_search_result(tr:ElementRef) -> SearchResult {
     let a = Selector::parse("a").unwrap();
+    let mut x = (0..5).map(|x| tr.child_elements().nth(x)
+        .expect("Received malformed HTML. Table incomplete."));
+
     return SearchResult {
-        id:          tr.child_elements().nth(0).unwrap().inner_html().to_string(),
-        author:      tr.child_elements().nth(1).unwrap().select(&a).next().unwrap().inner_html().to_string(),
-        title:       tr.child_elements().nth(2).unwrap().select(&a).next().unwrap().text().next().unwrap().to_string(),
-        publisher:   tr.child_elements().nth(3).unwrap().inner_html().to_string(),
-        year:        tr.child_elements().nth(4).unwrap().inner_html().to_string(),
-        pages:       tr.child_elements().nth(5).unwrap().inner_html().to_string(),
-        language:    tr.child_elements().nth(6).unwrap().inner_html().to_string(),
-        file_size:   tr.child_elements().nth(7).unwrap().inner_html().to_string(),
-        file_format: tr.child_elements().nth(8).unwrap().inner_html().to_string(),
-        dl_page:     tr.child_elements().nth(9).unwrap().select(&a).next().unwrap().attr("href").unwrap().to_string(),
+        id:          x.next().unwrap().inner_html().to_string(),
+        author:      x.next().unwrap().select(&a).next().expect("Received malformed HTML")
+                        .inner_html().to_string(),
+        title:       x.next().unwrap().select(&a).next().expect("Received malformed HTML")
+                        .text().next().unwrap().to_string(),
+        publisher:   x.next().unwrap().inner_html().to_string(),
+        year:        x.next().unwrap().inner_html().to_string(),
+        pages:       x.next().unwrap().inner_html().to_string(),
+        language:    x.next().unwrap().inner_html().to_string(),
+        file_size:   x.next().unwrap().inner_html().to_string(),
+        file_format: x.next().unwrap().inner_html().to_string(),
+        dl_page:     x.next().unwrap().select(&a).next().unwrap().attr("href").unwrap().to_string(),
     };
 }
 
@@ -45,7 +50,7 @@ fn libgsearch (searchterm:&str) -> Vec<SearchResult> {
 
     let select_rows = Selector::parse("tr").unwrap();
     let row_iterator = search_table.select(&select_rows).skip(1); //Note: skip(1) skips the table header
-    let rowstructs = row_iterator.map(tr_to_searchresult).collect();
+    let rowstructs = row_iterator.map(tr_to_search_result).collect();
     return rowstructs;
 }
 
