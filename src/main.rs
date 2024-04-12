@@ -1,4 +1,5 @@
-use std::env;
+use std::{env, io};
+use std::io::Write;
 //use fuzzy_select::FuzzySelect;
 use scraper::{ElementRef, Html, Selector};
 
@@ -71,9 +72,13 @@ fn parse_args() {
     let args: Vec<String> = env::args().collect();
 
     match args.len() {
-        // no arguments passed
         1 => {
-            print!("TODO: Interactive Mode");
+            print!("Enter search term: ");
+            io::stdout().flush().expect("Failed to flush stdout");
+
+            let searchterm = read_string();
+            let results = &libgsearch(&searchterm)[0];
+            println!("{:#?}", libglinks(&results.dl_page));
         },
         _ => {
             // If command is -help, print the help
@@ -89,8 +94,7 @@ fn parse_args() {
                 }
 
                 let results = &libgsearch(&searchterm)[0];
-                let z = libglinks(&results.dl_page);
-                println!("{:#?}", z);
+                println!("{:#?}", libglinks(&results.dl_page));
             }
         }
     }
