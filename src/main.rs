@@ -1,3 +1,4 @@
+use std::env;
 //use fuzzy_select::FuzzySelect;
 use scraper::{ElementRef, Html, Selector};
 
@@ -54,11 +55,51 @@ fn libglinks (dl_page:&str) -> String {
     return toplevel_div.descendent_elements().nth(2).unwrap().attr("href").unwrap().to_string();
 }
 
+fn help() {
+    println!("TODO: Help Message!");
+}
+
+fn read_string() -> String {
+    let mut input = String::new();
+    std::io::stdin()
+        .read_line(&mut input)
+        .expect("can not read user input");
+    input
+}
+
+fn parse_args() {
+    let args: Vec<String> = env::args().collect();
+
+    match args.len() {
+        // no arguments passed
+        1 => {
+            print!("TODO: Interactive Mode");
+        },
+        _ => {
+            // If command is -help, print the help
+            if args[1] == "--help" || args[1] == "-h"{
+                help();
+            }
+            else {
+                // Concatenate the search term
+                let mut searchterm = String::new();
+                for i in 1..args.len() {
+                    searchterm.push_str(&args[i]);
+                    searchterm.push_str(" ");
+                }
+
+                let results = &libgsearch(&searchterm)[0];
+                let z = libglinks(&results.dl_page);
+                println!("{:#?}", z);
+            }
+        }
+    }
+}
+
+
+
 fn main() {
-    let x = "harry";
-    let y = &libgsearch(x)[0];
-    let z = libglinks(&y.dl_page);
-    println!("{:#?}", z);
+    parse_args();
 
 
     // Fuzzy_select How To
@@ -69,3 +110,4 @@ fn main() {
     //     .select();
     // println!("\nYour favorite ice cream flavor is {:?}\n", selected);
 }
+
