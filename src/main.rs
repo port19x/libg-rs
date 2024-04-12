@@ -74,7 +74,7 @@ fn read_string() -> String {
     input
 }
 
-fn parse_args() {
+fn parse_args() -> String {
     let args: Vec<String> = env::args().collect();
 
     match args.len() {
@@ -82,25 +82,24 @@ fn parse_args() {
             print!("Enter search term: ");
             io::stdout().flush().expect("Failed to flush stdout");
 
-            let searchterm = read_string();
-            let results = &libgsearch(&searchterm)[0];
-            println!("{:#?}", libglinks(&results.dl_page));
+            read_string()
         },
         _ => {
             // If command is -help, print the help
             if args[1] == "--help" || args[1] == "-h"{
                 help();
+                exit(0);
             }
             else {
                 // Concatenate the search term
-                let mut searchterm = String::new();
-                for i in 1..args.len() {
-                    searchterm.push_str(&args[i]);
-                    searchterm.push_str(" ");
+                let mut search_term = String::new();
+                search_term.push_str(&args[1]);
+                for i in 2..args.len() {
+                    search_term.push_str(" ");
+                    search_term.push_str(&args[i]);
                 }
 
-                let results = &libgsearch(&searchterm)[0];
-                println!("{:#?}", libglinks(&results.dl_page));
+                search_term
             }
         }
     }
@@ -109,8 +108,18 @@ fn parse_args() {
 
 
 fn main() {
-    parse_args();
+    let search_term = parse_args();
 
+    let results = &libgsearch(&search_term);
+    if results.len() == 0 {
+        println!("No results found for search term: {}", search_term);
+        exit(1);
+    }
+    else {
+        for result in results {
+            println!("Title: {}\nAuthor: {}\nPublisher: {}\nYear: {}\nPages: {}\nLanguage: {}\nFile Size: {}\nFile Format: {}\nDownload Page: {}\n", result.title, result.author, result.publisher, result.year, result.pages, result.language, result.file_size, result.file_format, result.dl_page);
+        }
+    }
 
     // Fuzzy_select How To
     let options = vec!["vanilla", "strawberry", "chocolate"];
