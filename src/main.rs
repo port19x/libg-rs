@@ -1,6 +1,7 @@
 use std::{env, io};
 use std::io::Write;
-//use fuzzy_select::FuzzySelect;
+use std::process::exit;
+use dialoguer::FuzzySelect;
 use scraper::{ElementRef, Html, Selector};
 
 #[derive(Debug)]
@@ -107,11 +108,12 @@ fn main() {
 
 
     // Fuzzy_select How To
-    // let options = vec!["vanilla", "strawberry", "chocolate"];
-    // let selected = FuzzySelect::new()
-    //     .with_prompt("What's your favorite flavor of ice cream?")
-    //     .with_options(options)
-    //     .select();
-    // println!("\nYour favorite ice cream flavor is {:?}\n", selected);
+    let options = vec!["vanilla", "strawberry", "chocolate"];
+    let selected = FuzzySelect::new()
+        .with_prompt("What's your favorite flavor of ice cream?")
+        .items(&options)
+        .interact()
+        .expect("Dialoguer Issue");
+    println!("\nYour favorite ice cream flavor is {:?}\n", selected);
 }
 
