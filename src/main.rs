@@ -113,23 +113,28 @@ fn main() {
     let search_term = parse_args();
 
     let results = &libgsearch(&search_term);
+
     if results.len() == 0 {
         println!("No results found for search term: {}", search_term);
         exit(1);
     }
     else {
-        for result in results {
-            println!("Title: {}\nAuthor: {}\nPublisher: {}\nYear: {}\nPages: {}\nLanguage: {}\nFile Size: {}\nFile Format: {}\nDownload Page: {}\n", result.title, result.author, result.publisher, result.year, result.pages, result.language, result.file_size, result.file_format, result.dl_page);
-        }
-    }
+        // Convert into string array
+        let resultOptions = results.iter().enumerate()
+            .map(|(i, x)| format!("{}. \"{}\" by {}, {} ({} pages)",
+                             i+1, x.title, x.author, x.year, x.pages)).collect::<Vec<String>>();
 
-    // Fuzzy_select How To
-    let options = vec!["vanilla", "strawberry", "chocolate"];
-    let selected = FuzzySelect::new()
-        .with_prompt("What's your favorite flavor of ice cream?")
-        .items(&options)
-        .interact()
-        .expect("Dialoguer Issue");
-    println!("\nYour favorite ice cream flavor is {:?}\n", selected);
+        // Fuzzy Select
+        let selected = FuzzySelect::new()
+            .with_prompt(format!("Select out of {} books:", results.len()))
+            .items(&resultOptions)
+            .default(0)
+            .interact()
+            .expect("Dialoguer Issue");
+
+        let selected_result = &results[selected];
+        let download_link = libglinks(&selected_result.dl_page);
+        println!("Download link: {}", download_link);
+    }
 }
 
