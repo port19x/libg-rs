@@ -1,8 +1,17 @@
 use std::{env, io};
-use std::io::Write;
-use std::process::exit;
 use dialoguer::FuzzySelect;
 use scraper::{ElementRef, Html, Selector};
+use std::cmp::min;
+use std::fs::File;
+use std::io::Write;
+use std::path::PathBuf;
+use std::process::exit;
+use reqwest::Client;
+use indicatif::{ProgressBar, ProgressStyle};
+use futures_util::StreamExt;
+use tokio::runtime::Runtime;
+use regex::Regex;
+use tokio::task;
 
 #[derive(Debug)]
 struct SearchResult {
@@ -20,7 +29,7 @@ struct SearchResult {
 
 fn tr_to_search_result(tr:ElementRef) -> SearchResult {
     let a = Selector::parse("a").unwrap();
-    let error_msg :&str = "Received malformed HTML. Table incomplete. Please report this issue.";
+    let error_msg = "Received malformed HTML. Table incomplete. Please report this issue.";
     let mut x = (0..10).map(|x| tr.child_elements().nth(x)
         . expect(error_msg));
 
@@ -41,7 +50,7 @@ fn tr_to_search_result(tr:ElementRef) -> SearchResult {
     }
 }
 
-fn libgsearch (searchterm:&str) -> Vec<SearchResult> {
+fn libg_search(searchterm:&str) -> Vec<SearchResult> {
     let base = "https://libgen.rs/search.php?res=100&req=";
     let url = format!("{}{}", base, searchterm);
     let response = reqwest::blocking::get(url).unwrap().error_for_status().unwrap().text().unwrap();
@@ -56,7 +65,7 @@ fn libgsearch (searchterm:&str) -> Vec<SearchResult> {
     return rowstructs;
 }
 
-fn libglinks (dl_page:&str) -> String {
+fn libg_get_download(dl_page:&str) -> String {
     let response = reqwest::blocking::get(dl_page).unwrap().error_for_status().unwrap().text().unwrap();
     let document = Html::parse_document(&response);
     let toplevel_selector = Selector::parse("#download").unwrap();
@@ -107,12 +116,86 @@ fn parse_args() -> String {
     }
 }
 
+// Inspired by https://gist.github.com/giuliano-macedo/4d11d6b3bb003dba3a1b53f43d81b30d
+pub async fn download_search_result(client: &Client, search_result: &SearchResult, directory: PathBuf) -> Result<(), String> {
+    // Extract the download link
+    let dl_page_clone = search_result.dl_page.clone();
 
+    // Extract the download link asynchronously
+    let url = &task::spawn_blocking(move || {
+        libg_get_download(&dl_page_clone)
+    }).await.unwrap();
+
+    // Reqwest setup
+    let res = client
+        .get(url)
+        .send()
+        .await
+        .or(Err(format!("Failed to GET from '{}'", url)))?;
+    let total_size = res
+        .content_length()
+        .ok_or(format!("Failed to get content length from '{}'", url))?;
+
+    // Indicatif setup
+    let pb = ProgressBar::new(total_size);
+    pb.set_style(ProgressStyle::default_bar()
+        .template("{msg}\n{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")
+        .unwrap()
+        .progress_chars("#>-"));
+    pb.set_message(format!("Downloading {}", url));
+
+    // Combine directory and file name
+    let path = directory.join(sanitize_filename(&format!("{}.{}", search_result.title, search_result.file_format)));
+    let path_string = path.to_str().unwrap();
+
+
+    // download chunks
+    let mut file = File::create(path_string).or(Err(format!("Failed to create file '{}'", path_string)))?;
+    let mut downloaded: u64 = 0;
+    let mut stream = res.bytes_stream();
+
+    while let Some(item) = stream.next().await {
+        let chunk = item.or(Err(format!("Error while downloading file")))?;
+        file.write_all(&chunk)
+            .or(Err(format!("Error while writing to file")))?;
+        let new = min(downloaded + (chunk.len() as u64), total_size);
+        downloaded = new;
+        pb.set_position(new);
+    }
+
+    pb.finish_with_message(format!("Downloaded {} to {}", url, path_string));
+    return Ok(());
+}
+
+fn sanitize_filename(filename: &str) -> String {
+    // Sanitize filename according to this list https://stackoverflow.com/a/31976060
+    let forbidden_chars_regex = Regex::new(r#"[<>:"/\\|?*\x00-\x1F]"#).unwrap(); // Forbidden characters on Windows and control characters
+    let reserved_names_regex =
+        Regex::new(r#"(?i)^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$"#).unwrap(); // Reserved names on Windows
+
+    let mut sanitized = forbidden_chars_regex.replace_all(filename, "_").to_string();
+
+    // Check for reserved names and append underscores if necessary
+    if reserved_names_regex.is_match(&sanitized) {
+        sanitized.push('_');
+    }
+
+    sanitized = sanitized.trim_end_matches(|c| c == '.' || c == ' ').to_string();
+
+    sanitized
+}
 
 fn main() {
     let search_term = parse_args();
 
-    let results = &libgsearch(&search_term);
+    if search_term.len() < 5 {
+        println!("Search term must be at least 3 characters long.");
+        exit(1);
+    }
+
+    println!("Searching for: {}", search_term);
+
+    let results = &libg_search(&search_term);
 
     if results.len() == 0 {
         println!("No results found for search term: {}", search_term);
@@ -131,7 +214,7 @@ fn main() {
                     x.pages.split('[')
                         .collect::<Vec<&str>>()
                         .get(1)
-                        .expect("Error parsing page count")
+                        .unwrap()
                         .replace("]", "")
                         .to_string()
                 } else {
@@ -156,7 +239,8 @@ fn main() {
                                         i+1, x.title, author, x.year, page_info, x.file_format));
         }
 
-        // Fuzzy Select
+
+        // Fuzzy select the desired result
         let selected = FuzzySelect::new()
             .with_prompt(format!("Select out of {} books:", results.len()))
             .items(&result_options)
@@ -165,8 +249,22 @@ fn main() {
             .expect("Dialoguer Issue");
 
         let selected_result = &results[selected];
-        let download_link = libglinks(&selected_result.dl_page);
-        println!("Download link: {}", download_link);
+
+
+        // Get current directory
+        let current_dir = env::current_dir().unwrap();
+
+        // Run the download_file function within the Tokio runtime
+        let mut rt = Runtime::new().unwrap();
+
+        rt.block_on(async {
+            let client = reqwest::Client::new();
+
+            if let Err(err) = download_search_result(&client, selected_result, current_dir).await {
+                eprintln!("Error downloading file: {}", err);
+            } else {
+                println!("File successfully downloaded!");
+            }
+        });
     }
 }
-
