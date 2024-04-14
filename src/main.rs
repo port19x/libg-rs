@@ -25,19 +25,19 @@ fn tr_to_search_result(tr:ElementRef) -> SearchResult {
         . expect(error_msg));
 
     SearchResult {
-        id:             x.next().expect(error_msg).inner_html().to_string(),
+        id:             x.next().expect(error_msg).inner_html().trim().to_string(),
         author:         x.next().expect(error_msg).select(&a).next().expect(error_msg)
-                            .inner_html().to_string(),
+                            .inner_html().trim().to_string(),
         title:          x.next().expect(error_msg).select(&a).next().expect(error_msg)
-                            .text().next().expect(error_msg).to_string(),
-        publisher:      x.next().expect(error_msg).inner_html().to_string(),
-        year:           x.next().expect(error_msg).inner_html().to_string(),
-        pages:          x.next().expect(error_msg).inner_html().to_string(),
-        language:       x.next().expect(error_msg).inner_html().to_string(),
-        file_size:      x.next().expect(error_msg).inner_html().to_string(),
-        file_format:    x.next().expect(error_msg).inner_html().to_string(),
+                            .text().next().expect(error_msg).trim().to_string(),
+        publisher:      x.next().expect(error_msg).inner_html().trim().to_string(),
+        year:           x.next().expect(error_msg).inner_html().trim().to_string(),
+        pages:          x.next().expect(error_msg).inner_html().trim().to_string(),
+        language:       x.next().expect(error_msg).inner_html().trim().to_string(),
+        file_size:      x.next().expect(error_msg).inner_html().trim().to_string(),
+        file_format:    x.next().expect(error_msg).inner_html().trim().to_string(),
         dl_page:        x.next().expect(error_msg).select(&a).next().expect(error_msg).
-                            attr("href").unwrap().to_string(),
+                            attr("href").expect(error_msg).trim().to_string(),
     }
 }
 
@@ -120,14 +120,46 @@ fn main() {
     }
     else {
         // Convert into string array
-        let resultOptions = results.iter().enumerate()
-            .map(|(i, x)| format!("{}. \"{}\" by {}, {} ({} pages)",
-                             i+1, x.title, x.author, x.year, x.pages)).collect::<Vec<String>>();
+        let mut result_options = Vec::new();
+
+        for (i, x) in results.iter().enumerate() {
+            // Account for the fact that some books differentiate pages and pages with content
+            let page_count =
+                if x.pages.is_empty() || x.pages.starts_with('0') {
+                    "".to_string()
+                } else if x.pages.contains('[') {
+                    x.pages.split('[')
+                        .collect::<Vec<&str>>()
+                        .get(1)
+                        .expect("Error parsing page count")
+                        .replace("]", "")
+                        .to_string()
+                } else {
+                    x.pages.to_string()
+                };
+
+            let page_info =
+                // Correct pluralization
+                if page_count.len() > 0 {
+                    if page_count.len() == 1 && page_count.starts_with("1") {
+                        format!("{} page - ", page_count)
+                    }
+                    else {
+                        format!("{} pages - ", page_count)
+                    }
+                }
+                else {String::new()};
+
+            let author = if x.author.len() == 0 {"Unknown author"} else {&x.author};
+
+            result_options.push(format!("{}. \"{}\" by {}, {} ({}{})",
+                                        i+1, x.title, author, x.year, page_info, x.file_format));
+        }
 
         // Fuzzy Select
         let selected = FuzzySelect::new()
             .with_prompt(format!("Select out of {} books:", results.len()))
-            .items(&resultOptions)
+            .items(&result_options)
             .default(0)
             .interact()
             .expect("Dialoguer Issue");
