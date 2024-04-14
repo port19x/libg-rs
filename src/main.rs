@@ -20,23 +20,25 @@ struct SearchResult {
 
 fn tr_to_search_result(tr:ElementRef) -> SearchResult {
     let a = Selector::parse("a").unwrap();
-    let mut x = (0..5).map(|x| tr.child_elements().nth(x)
-        .expect("Received malformed HTML. Table incomplete."));
+    let error_msg :&str = "Received malformed HTML. Table incomplete. Please report this issue.";
+    let mut x = (0..10).map(|x| tr.child_elements().nth(x)
+        . expect(error_msg));
 
-    return SearchResult {
-        id:          x.next().unwrap().inner_html().to_string(),
-        author:      x.next().unwrap().select(&a).next().expect("Received malformed HTML")
-                        .inner_html().to_string(),
-        title:       x.next().unwrap().select(&a).next().expect("Received malformed HTML")
-                        .text().next().unwrap().to_string(),
-        publisher:   x.next().unwrap().inner_html().to_string(),
-        year:        x.next().unwrap().inner_html().to_string(),
-        pages:       x.next().unwrap().inner_html().to_string(),
-        language:    x.next().unwrap().inner_html().to_string(),
-        file_size:   x.next().unwrap().inner_html().to_string(),
-        file_format: x.next().unwrap().inner_html().to_string(),
-        dl_page:     x.next().unwrap().select(&a).next().unwrap().attr("href").unwrap().to_string(),
-    };
+    SearchResult {
+        id:             x.next().expect(error_msg).inner_html().to_string(),
+        author:         x.next().expect(error_msg).select(&a).next().expect(error_msg)
+                            .inner_html().to_string(),
+        title:          x.next().expect(error_msg).select(&a).next().expect(error_msg)
+                            .text().next().expect(error_msg).to_string(),
+        publisher:      x.next().expect(error_msg).inner_html().to_string(),
+        year:           x.next().expect(error_msg).inner_html().to_string(),
+        pages:          x.next().expect(error_msg).inner_html().to_string(),
+        language:       x.next().expect(error_msg).inner_html().to_string(),
+        file_size:      x.next().expect(error_msg).inner_html().to_string(),
+        file_format:    x.next().expect(error_msg).inner_html().to_string(),
+        dl_page:        x.next().expect(error_msg).select(&a).next().expect(error_msg).
+                            attr("href").unwrap().to_string(),
+    }
 }
 
 fn libgsearch (searchterm:&str) -> Vec<SearchResult> {
