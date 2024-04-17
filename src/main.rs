@@ -28,48 +28,72 @@ struct SearchResult {
     dl_page: String,
 }
 
+static ERR_BACKEND_CHANGED: &str = "Backend change detected. Please check the GitHub for an updated client. Exiting...";
+
 fn tr_to_search_result(tr:ElementRef) -> SearchResult {
-    let a = Selector::parse("a").unwrap();
-    let error_msg = "Received malformed HTML. Table incomplete. Please report this issue.";
+    let a = Selector::parse("a").expect(ERR_BACKEND_CHANGED);
     let mut x = (0..10).map(|x| tr.child_elements().nth(x)
-        . expect(error_msg));
+        . expect(ERR_BACKEND_CHANGED));
 
     SearchResult {
-        id:             x.next().expect(error_msg).inner_html().trim().to_string(),
-        author:         x.next().expect(error_msg).select(&a).next().expect(error_msg)
+        id:             x.next().expect(ERR_BACKEND_CHANGED).inner_html().trim().to_string(),
+        author:         x.next().expect(ERR_BACKEND_CHANGED).select(&a).next().expect(ERR_BACKEND_CHANGED)
                             .inner_html().trim().to_string(),
-        title:          x.next().expect(error_msg).select(&a).next().expect(error_msg)
-                            .text().next().expect(error_msg).trim().to_string(),
-        publisher:      x.next().expect(error_msg).inner_html().trim().to_string(),
-        year:           x.next().expect(error_msg).inner_html().trim().to_string(),
-        pages:          x.next().expect(error_msg).inner_html().trim().to_string(),
-        language:       x.next().expect(error_msg).inner_html().trim().to_string(),
-        file_size:      x.next().expect(error_msg).inner_html().trim().to_string(),
-        file_format:    x.next().expect(error_msg).inner_html().trim().to_string(),
-        dl_page:        x.next().expect(error_msg).select(&a).next().expect(error_msg).
-                            attr("href").expect(error_msg).trim().to_string(),
+        title:          x.next().expect(ERR_BACKEND_CHANGED).select(&a).next().expect(ERR_BACKEND_CHANGED)
+                            .text().next().expect(ERR_BACKEND_CHANGED).trim().to_string(),
+        publisher:      x.next().expect(ERR_BACKEND_CHANGED).inner_html().trim().to_string(),
+        year:           x.next().expect(ERR_BACKEND_CHANGED).inner_html().trim().to_string(),
+        pages:          x.next().expect(ERR_BACKEND_CHANGED).inner_html().trim().to_string(),
+        language:       x.next().expect(ERR_BACKEND_CHANGED).inner_html().trim().to_string(),
+        file_size:      x.next().expect(ERR_BACKEND_CHANGED).inner_html().trim().to_string(),
+        file_format:    x.next().expect(ERR_BACKEND_CHANGED).inner_html().trim().to_string(),
+        dl_page:        x.next().expect(ERR_BACKEND_CHANGED).select(&a).next().expect(ERR_BACKEND_CHANGED).
+                            attr("href").expect(ERR_BACKEND_CHANGED).trim().to_string(),
     }
 }
 
-fn libg_search(searchterm:&str) -> Vec<SearchResult> {
+fn libg_search(search_term: &str) -> Vec<SearchResult> {
+    // Pagination
     let mut page = 1;
-    let mut row_structs: Vec<SearchResult> = Vec::new();
+    let mut all_results: Vec<SearchResult> = Vec::new();
 
-    // do while
+    // Domain fallbacks in case of server downtime
+    let domains = ["libgen.rs", "libgen.is", "libgen.st"];
+    let mut domain_choice = 0;
+
     loop {
-        let base = "https://libgen.rs/search.php?res=100&req=";
-        let url = format!("{}{}&page={}", base, searchterm, page);
-        let response = reqwest::blocking::get(url).unwrap().error_for_status().unwrap().text().unwrap();
+        let url = format!("https://{}/search.php?res=100&req={}&page={}",
+                          domains[domain_choice], search_term, page);
+        let response = reqwest::blocking::get(url).expect("Error in certificate chain.")
+            .error_for_status();
+        let response_text : String;
 
-        let document = Html::parse_document(&response);
+        // Fall back on alternative domain if the current one is down
+        match response {
+            Ok(response) => {
+                response_text = response.text().expect(ERR_BACKEND_CHANGED);
+            },
+            Err(err) => {
+                if (domain_choice == domains.len() - 1) {
+                    println!("All backend servers are down. Check the GitHub for an updated client. Exiting...");
+                    exit(1);
+                }
+                else {
+                    domain_choice += 1;
+                    continue;
+                }
+            }
+        }
 
-        let toplevel_selector = Selector::parse(".c > tbody").unwrap();
+        let document = Html::parse_document(&response_text);
+
+        let toplevel_selector = Selector::parse(".c > tbody").expect(ERR_BACKEND_CHANGED);
         let search_table_result: Result<Option<ElementRef<'_>>, Error> = Ok(document.select(&toplevel_selector).next());
 
         // Check if search results are found
         match search_table_result {
             Ok(Some(search_table)) => {
-                let select_rows = Selector::parse("tr").unwrap();
+                let select_rows = Selector::parse("tr").expect(ERR_BACKEND_CHANGED);
 
                 if (search_table.select(&select_rows).count() == 1) {
                     break;
@@ -79,7 +103,7 @@ fn libg_search(searchterm:&str) -> Vec<SearchResult> {
 
                 let new_row_structs : Vec<_> = row_iterator.map(tr_to_search_result).collect();
                 // concatinate to row_structs
-                row_structs.extend(new_row_structs);
+                all_results.extend(new_row_structs);
             }
             Ok(None) => {
                 return Vec::new();
@@ -92,15 +116,15 @@ fn libg_search(searchterm:&str) -> Vec<SearchResult> {
         page += 1;
     }
 
-    return row_structs;
+    return all_results;
 }
 
 fn libg_get_download(dl_page:&str) -> String {
-    let response = reqwest::blocking::get(dl_page).unwrap().error_for_status().unwrap().text().unwrap();
+    let response = reqwest::blocking::get(dl_page).expect(ERR_BACKEND_CHANGED).error_for_status().expect(ERR_BACKEND_CHANGED).text().expect(ERR_BACKEND_CHANGED);
     let document = Html::parse_document(&response);
-    let toplevel_selector = Selector::parse("#download").unwrap();
-    let toplevel_div = document.select(&toplevel_selector).next().unwrap();
-    return toplevel_div.descendent_elements().nth(2).unwrap().attr("href").unwrap().to_string();
+    let toplevel_selector = Selector::parse("#download").expect(ERR_BACKEND_CHANGED);
+    let toplevel_div = document.select(&toplevel_selector).next().expect(ERR_BACKEND_CHANGED);
+    return toplevel_div.descendent_elements().nth(2).expect(ERR_BACKEND_CHANGED).attr("href").expect(ERR_BACKEND_CHANGED).to_string();
 }
 
 fn help() {
@@ -111,7 +135,7 @@ fn read_string() -> String {
     let mut input = String::new();
     std::io::stdin()
         .read_line(&mut input)
-        .expect("can not read user input");
+        .expect("Cannot read user input.");
     input
 }
 
@@ -154,7 +178,7 @@ pub async fn download_search_result(client: &Client, search_result: &SearchResul
     // Extract the download link asynchronously
     let url = &task::spawn_blocking(move || {
         libg_get_download(&dl_page_clone)
-    }).await.unwrap();
+    }).await.expect("Error while fetching download link");
 
     // Reqwest setup
     let res = client
@@ -215,9 +239,49 @@ fn sanitize_filename(filename: &str) -> String {
     sanitized
 }
 
+fn stringify_search_results(results: &Vec<SearchResult>) -> Vec<String> {
+    // Convert into string array
+    let mut result_options = Vec::new();
+
+    for (i, x) in results.iter().enumerate() {
+        // Account for the fact that some books differentiate pages and pages with content
+        let page_count =
+            if x.pages.is_empty() || x.pages.starts_with('0') {
+                "".to_string()
+            } else if x.pages.contains('[') {
+                x.pages.split('[')
+                    .collect::<Vec<&str>>()
+                    .get(1)
+                    .unwrap()
+                    .replace("]", "")
+                    .to_string()
+            } else {
+                x.pages.to_string()
+            };
+
+        let page_info =
+            // Correct pluralization
+            if page_count.len() > 0 {
+                if page_count.len() == 1 && page_count.starts_with("1") {
+                    format!("{} page - ", page_count)
+                } else {
+                    format!("{} pages - ", page_count)
+                }
+            } else { String::new() };
+
+        let author = if x.author.len() == 0 { "Unknown author" } else { &x.author };
+
+        result_options.push(format!("{}. \"{}\" by {}, {} ({}{})",
+                                    i + 1, x.title, author, x.year, page_info, x.file_format));
+    }
+    result_options
+}
+
 fn main() {
+    // Extract search term
     let search_term = parse_args();
 
+    // Since an empty string has the length 2, we need to check against 5 is we want 3 characters
     if search_term.len() < 5 {
         println!("Search term must be at least 3 characters long.");
         exit(1);
@@ -232,43 +296,7 @@ fn main() {
         exit(1);
     }
     else {
-        // Convert into string array
-        let mut result_options = Vec::new();
-
-        for (i, x) in results.iter().enumerate() {
-            // Account for the fact that some books differentiate pages and pages with content
-            let page_count =
-                if x.pages.is_empty() || x.pages.starts_with('0') {
-                    "".to_string()
-                } else if x.pages.contains('[') {
-                    x.pages.split('[')
-                        .collect::<Vec<&str>>()
-                        .get(1)
-                        .unwrap()
-                        .replace("]", "")
-                        .to_string()
-                } else {
-                    x.pages.to_string()
-                };
-
-            let page_info =
-                // Correct pluralization
-                if page_count.len() > 0 {
-                    if page_count.len() == 1 && page_count.starts_with("1") {
-                        format!("{} page - ", page_count)
-                    }
-                    else {
-                        format!("{} pages - ", page_count)
-                    }
-                }
-                else {String::new()};
-
-            let author = if x.author.len() == 0 {"Unknown author"} else {&x.author};
-
-            result_options.push(format!("{}. \"{}\" by {}, {} ({}{})",
-                                        i+1, x.title, author, x.year, page_info, x.file_format));
-        }
-
+        let result_options = stringify_search_results(results);
 
         // Fuzzy select the desired result
         let selected = FuzzySelect::new()
@@ -276,13 +304,12 @@ fn main() {
             .items(&result_options)
             .default(0)
             .interact()
-            .expect("Dialoguer Issue");
+            .expect("Dialoguer Issue. Please use a different terminal emulator.");
 
         let selected_result = &results[selected];
 
-
         // Get current directory
-        let current_dir = env::current_dir().unwrap();
+        let current_dir = env::current_dir().expect("Please run the program in a directory where you have write permissions.");
 
         // Run the download_file function within the Tokio runtime
         let mut rt = Runtime::new().unwrap();
