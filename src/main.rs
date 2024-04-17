@@ -73,8 +73,8 @@ fn libg_search(search_term: &str) -> Vec<SearchResult> {
             Ok(response) => {
                 response_text = response.text().expect(ERR_BACKEND_CHANGED);
             },
-            Err(err) => {
-                if (domain_choice == domains.len() - 1) {
+            Err(..) => {
+                if domain_choice == domains.len() - 1 {
                     println!("All backend servers are down. Check the GitHub for an updated client. Exiting...");
                     exit(1);
                 }
@@ -95,20 +95,20 @@ fn libg_search(search_term: &str) -> Vec<SearchResult> {
             Ok(Some(search_table)) => {
                 let select_rows = Selector::parse("tr").expect(ERR_BACKEND_CHANGED);
 
-                if (search_table.select(&select_rows).count() == 1) {
+                if search_table.select(&select_rows).count() == 1 {
                     break;
                 }
 
                 let row_iterator = search_table.select(&select_rows).skip(1); //Note: skip(1) skips the table header
 
                 let new_row_structs : Vec<_> = row_iterator.map(tr_to_search_result).collect();
-                // concatinate to row_structs
+                // Concatenate to all_results
                 all_results.extend(new_row_structs);
             }
             Ok(None) => {
                 return Vec::new();
             }
-            Err(err) => {
+            Err(..) => {
                 return Vec::new();
             }
         }
@@ -128,7 +128,12 @@ fn libg_get_download(dl_page:&str) -> String {
 }
 
 fn help() {
-    println!("TODO: Help Message!");
+    println!("Tool to download books from supported archive sites.\n");
+    println!("Usage: libgen-rs [SEARCH TERM]");
+    println!("libgen-rs [OPTIONS]");
+    println!("libgen-rs\n");
+    println!("Options:");
+    println!("-h, --help      Display this help message");
 }
 
 fn read_string() -> String {
@@ -151,7 +156,7 @@ fn parse_args() -> String {
         },
         _ => {
             // If command is -help, print the help
-            if args[1] == "--help" || args[1] == "-h"{
+            if args[1].to_lowercase() == "--help" || args[1].to_lowercase() == "-h"{
                 help();
                 exit(0);
             }
@@ -171,7 +176,7 @@ fn parse_args() -> String {
 }
 
 // Inspired by https://gist.github.com/giuliano-macedo/4d11d6b3bb003dba3a1b53f43d81b30d
-pub async fn download_search_result(client: &Client, search_result: &SearchResult, directory: PathBuf) -> Result<(), String> {
+async fn download_search_result(client: &Client, search_result: &SearchResult, directory: PathBuf) -> Result<(), String> {
     // Extract the download link
     let dl_page_clone = search_result.dl_page.clone();
 
@@ -312,10 +317,10 @@ fn main() {
         let current_dir = env::current_dir().expect("Please run the program in a directory where you have write permissions.");
 
         // Run the download_file function within the Tokio runtime
-        let mut rt = Runtime::new().unwrap();
+        let rt = Runtime::new().unwrap();
 
         rt.block_on(async {
-            let client = reqwest::Client::new();
+            let client = Client::new();
 
             if let Err(err) = download_search_result(&client, selected_result, current_dir).await {
                 eprintln!("Error downloading file: {}", err);
