@@ -2,6 +2,7 @@ use std::{env, io};
 use dialoguer::FuzzySelect;
 use scraper::{ElementRef, Html, Selector};
 use std::cmp::min;
+use std::fmt::Error;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
@@ -51,18 +52,47 @@ fn tr_to_search_result(tr:ElementRef) -> SearchResult {
 }
 
 fn libg_search(searchterm:&str) -> Vec<SearchResult> {
-    let base = "https://libgen.rs/search.php?res=100&req=";
-    let url = format!("{}{}", base, searchterm);
-    let response = reqwest::blocking::get(url).unwrap().error_for_status().unwrap().text().unwrap();
+    let mut page = 1;
+    let mut row_structs: Vec<SearchResult> = Vec::new();
 
-    let document = Html::parse_document(&response);
-    let toplevel_selector = Selector::parse(".c > tbody").unwrap();
-    let search_table = document.select(&toplevel_selector).next().unwrap();
+    // do while
+    loop {
+        let base = "https://libgen.rs/search.php?res=100&req=";
+        let url = format!("{}{}&page={}", base, searchterm, page);
+        let response = reqwest::blocking::get(url).unwrap().error_for_status().unwrap().text().unwrap();
 
-    let select_rows = Selector::parse("tr").unwrap();
-    let row_iterator = search_table.select(&select_rows).skip(1); //Note: skip(1) skips the table header
-    let rowstructs = row_iterator.map(tr_to_search_result).collect();
-    return rowstructs;
+        let document = Html::parse_document(&response);
+
+        let toplevel_selector = Selector::parse(".c > tbody").unwrap();
+        let search_table_result: Result<Option<ElementRef<'_>>, Error> = Ok(document.select(&toplevel_selector).next());
+
+        // Check if search results are found
+        match search_table_result {
+            Ok(Some(search_table)) => {
+                let select_rows = Selector::parse("tr").unwrap();
+
+                if (search_table.select(&select_rows).count() == 1) {
+                    break;
+                }
+
+                let row_iterator = search_table.select(&select_rows).skip(1); //Note: skip(1) skips the table header
+
+                let new_row_structs : Vec<_> = row_iterator.map(tr_to_search_result).collect();
+                // concatinate to row_structs
+                row_structs.extend(new_row_structs);
+            }
+            Ok(None) => {
+                return Vec::new();
+            }
+            Err(err) => {
+                return Vec::new();
+            }
+        }
+
+        page += 1;
+    }
+
+    return row_structs;
 }
 
 fn libg_get_download(dl_page:&str) -> String {
