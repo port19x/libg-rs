@@ -5,7 +5,6 @@ use regex::Regex;
 use reqwest::Client;
 use scraper::{ElementRef, Html, Selector};
 use std::cmp::min;
-use std::fmt::Error;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
@@ -16,14 +15,10 @@ use tokio::task;
 
 #[derive(Debug)]
 struct SearchResult {
-    id: String,
     author: String,
     title: String,
-    publisher: String,
     year: String,
     pages: String,
-    language: String,
-    file_size: String,
     file_format: String,
     dl_page: String,
 }
@@ -33,27 +28,19 @@ static ERR_BACKEND_CHANGED: &str =
 
 fn tr_to_search_result(tr: ElementRef) -> SearchResult {
     let a = Selector::parse("a").expect(ERR_BACKEND_CHANGED);
-    let mut x = (0..10).map(|x| tr.child_elements().nth(x).expect(ERR_BACKEND_CHANGED));
+    let x: Vec<_> = (0..10)
+        .map(|x| tr.child_elements().nth(x).expect(ERR_BACKEND_CHANGED))
+        .collect();
 
     SearchResult {
-        id: x
-            .next()
-            .expect(ERR_BACKEND_CHANGED)
-            .inner_html()
-            .trim()
-            .to_string(),
-        author: x
-            .next()
-            .expect(ERR_BACKEND_CHANGED)
+        author: x[1]
             .select(&a)
             .next()
             .expect(ERR_BACKEND_CHANGED)
             .inner_html()
             .trim()
             .to_string(),
-        title: x
-            .next()
-            .expect(ERR_BACKEND_CHANGED)
+        title: x[2]
             .select(&a)
             .next()
             .expect(ERR_BACKEND_CHANGED)
@@ -62,45 +49,10 @@ fn tr_to_search_result(tr: ElementRef) -> SearchResult {
             .expect(ERR_BACKEND_CHANGED)
             .trim()
             .to_string(),
-        publisher: x
-            .next()
-            .expect(ERR_BACKEND_CHANGED)
-            .inner_html()
-            .trim()
-            .to_string(),
-        year: x
-            .next()
-            .expect(ERR_BACKEND_CHANGED)
-            .inner_html()
-            .trim()
-            .to_string(),
-        pages: x
-            .next()
-            .expect(ERR_BACKEND_CHANGED)
-            .inner_html()
-            .trim()
-            .to_string(),
-        language: x
-            .next()
-            .expect(ERR_BACKEND_CHANGED)
-            .inner_html()
-            .trim()
-            .to_string(),
-        file_size: x
-            .next()
-            .expect(ERR_BACKEND_CHANGED)
-            .inner_html()
-            .trim()
-            .to_string(),
-        file_format: x
-            .next()
-            .expect(ERR_BACKEND_CHANGED)
-            .inner_html()
-            .trim()
-            .to_string(),
-        dl_page: x
-            .next()
-            .expect(ERR_BACKEND_CHANGED)
+        year: x[4].inner_html().trim().to_string(),
+        pages: x[5].inner_html().trim().to_string(),
+        file_format: x[8].inner_html().trim().to_string(),
+        dl_page: x[9]
             .select(&a)
             .next()
             .expect(ERR_BACKEND_CHANGED)
@@ -149,12 +101,12 @@ fn libg_search(search_term: &str) -> Vec<SearchResult> {
         let document = Html::parse_document(&response_text);
 
         let toplevel_selector = Selector::parse(".c > tbody").expect(ERR_BACKEND_CHANGED);
-        let search_table_result: Result<Option<ElementRef<'_>>, Error> =
-            Ok(document.select(&toplevel_selector).next());
+        let search_table_result: Option<ElementRef<'_>> =
+            document.select(&toplevel_selector).next();
 
         // Check if search results are found
         match search_table_result {
-            Ok(Some(search_table)) => {
+            Some(search_table) => {
                 let select_rows = Selector::parse("tr").expect(ERR_BACKEND_CHANGED);
 
                 if search_table.select(&select_rows).count() == 1 {
@@ -167,10 +119,7 @@ fn libg_search(search_term: &str) -> Vec<SearchResult> {
                 // Concatenate to all_results
                 all_results.extend(new_row_structs);
             }
-            Ok(None) => {
-                return Vec::new();
-            }
-            Err(..) => {
+            None => {
                 return Vec::new();
             }
         }
@@ -239,9 +188,9 @@ fn parse_args() -> String {
                 // Concatenate the search term
                 let mut search_term = String::new();
                 search_term.push_str(&args[1]);
-                for i in 2..args.len() {
+                for item in args.iter().skip(2) {
                     search_term.push(' ');
-                    search_term.push_str(&args[i]);
+                    search_term.push_str(item);
                 }
 
                 search_term
@@ -328,7 +277,7 @@ fn sanitize_filename(filename: &str) -> String {
     sanitized
 }
 
-fn stringify_search_results(results: &Vec<SearchResult>) -> Vec<String> {
+fn stringify_search_results(results: &[SearchResult]) -> Vec<String> {
     // Convert into string array
     let mut result_options = Vec::new();
 
