@@ -26,7 +26,7 @@ struct SearchResult {
 static ERR_BACKEND_CHANGED: &str =
     "Backend change detected. Please check the GitHub for an updated client. Exiting...";
 
-fn tr_to_search_result(tr: ElementRef) -> SearchResult {
+fn tr_to_search_result(tr:ElementRef) -> SearchResult {
     let a = Selector::parse("a").expect(ERR_BACKEND_CHANGED);
     let x: Vec<_> = (0..10)
         .map(|x| tr.child_elements().nth(x).expect(ERR_BACKEND_CHANGED))
