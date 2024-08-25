@@ -1,54 +1,65 @@
-use std::{env, io};
 use dialoguer::FuzzySelect;
+use futures_util::StreamExt;
+use indicatif::{ProgressBar, ProgressStyle};
+use regex::Regex;
+use reqwest::Client;
 use scraper::{ElementRef, Html, Selector};
 use std::cmp::min;
-use std::fmt::Error;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::exit;
-use reqwest::Client;
-use indicatif::{ProgressBar, ProgressStyle};
-use futures_util::StreamExt;
+use std::{env, io};
 use tokio::runtime::Runtime;
-use regex::Regex;
 use tokio::task;
 
 #[derive(Debug)]
 struct SearchResult {
-    id: String,
     author: String,
     title: String,
-    publisher: String,
     year: String,
     pages: String,
-    language: String,
-    file_size: String,
     file_format: String,
     dl_page: String,
 }
 
-static ERR_BACKEND_CHANGED: &str = "Backend change detected. Please check the GitHub for an updated client. Exiting...";
+static ERR_BACKEND_CHANGED: &str =
+    "Backend change detected. Please check the GitHub for an updated client. Exiting...";
 
 fn tr_to_search_result(tr:ElementRef) -> SearchResult {
     let a = Selector::parse("a").expect(ERR_BACKEND_CHANGED);
-    let mut x = (0..10).map(|x| tr.child_elements().nth(x)
-        . expect(ERR_BACKEND_CHANGED));
+    let x: Vec<_> = (0..10)
+        .map(|x| tr.child_elements().nth(x).expect(ERR_BACKEND_CHANGED))
+        .collect();
 
     SearchResult {
-        id:             x.next().expect(ERR_BACKEND_CHANGED).inner_html().trim().to_string(),
-        author:         x.next().expect(ERR_BACKEND_CHANGED).select(&a).next().expect(ERR_BACKEND_CHANGED)
-                            .inner_html().trim().to_string(),
-        title:          x.next().expect(ERR_BACKEND_CHANGED).select(&a).next().expect(ERR_BACKEND_CHANGED)
-                            .text().next().expect(ERR_BACKEND_CHANGED).trim().to_string(),
-        publisher:      x.next().expect(ERR_BACKEND_CHANGED).inner_html().trim().to_string(),
-        year:           x.next().expect(ERR_BACKEND_CHANGED).inner_html().trim().to_string(),
-        pages:          x.next().expect(ERR_BACKEND_CHANGED).inner_html().trim().to_string(),
-        language:       x.next().expect(ERR_BACKEND_CHANGED).inner_html().trim().to_string(),
-        file_size:      x.next().expect(ERR_BACKEND_CHANGED).inner_html().trim().to_string(),
-        file_format:    x.next().expect(ERR_BACKEND_CHANGED).inner_html().trim().to_string(),
-        dl_page:        x.next().expect(ERR_BACKEND_CHANGED).select(&a).next().expect(ERR_BACKEND_CHANGED).
-                            attr("href").expect(ERR_BACKEND_CHANGED).trim().to_string(),
+        author: x[1]
+            .select(&a)
+            .next()
+            .expect(ERR_BACKEND_CHANGED)
+            .inner_html()
+            .trim()
+            .to_string(),
+        title: x[2]
+            .select(&a)
+            .next()
+            .expect(ERR_BACKEND_CHANGED)
+            .text()
+            .next()
+            .expect(ERR_BACKEND_CHANGED)
+            .trim()
+            .to_string(),
+        year: x[4].inner_html().trim().to_string(),
+        pages: x[5].inner_html().trim().to_string(),
+        file_format: x[8].inner_html().trim().to_string(),
+        dl_page: x[9]
+            .select(&a)
+            .next()
+            .expect(ERR_BACKEND_CHANGED)
+            .attr("href")
+            .expect(ERR_BACKEND_CHANGED)
+            .trim()
+            .to_string(),
     }
 }
 
@@ -62,23 +73,25 @@ fn libg_search(search_term: &str) -> Vec<SearchResult> {
     let mut domain_choice = 0;
 
     loop {
-        let url = format!("https://{}/search.php?res=100&req={}&page={}",
-                          domains[domain_choice], search_term, page);
-        let response = reqwest::blocking::get(url).expect("Error in certificate chain.")
+        let url = format!(
+            "https://{}/search.php?res=100&req={}&page={}",
+            domains[domain_choice], search_term, page
+        );
+        let response = reqwest::blocking::get(url)
+            .expect("Error in certificate chain.")
             .error_for_status();
-        let response_text : String;
+        let response_text: String;
 
         // Fall back on alternative domain if the current one is down
         match response {
             Ok(response) => {
                 response_text = response.text().expect(ERR_BACKEND_CHANGED);
-            },
+            }
             Err(..) => {
                 if domain_choice == domains.len() - 1 {
                     println!("All backend servers are down. Check the GitHub for an updated client. Exiting...");
                     exit(1);
-                }
-                else {
+                } else {
                     domain_choice += 1;
                     continue;
                 }
@@ -88,11 +101,12 @@ fn libg_search(search_term: &str) -> Vec<SearchResult> {
         let document = Html::parse_document(&response_text);
 
         let toplevel_selector = Selector::parse(".c > tbody").expect(ERR_BACKEND_CHANGED);
-        let search_table_result: Result<Option<ElementRef<'_>>, Error> = Ok(document.select(&toplevel_selector).next());
+        let search_table_result: Option<ElementRef<'_>> =
+            document.select(&toplevel_selector).next();
 
         // Check if search results are found
         match search_table_result {
-            Ok(Some(search_table)) => {
+            Some(search_table) => {
                 let select_rows = Selector::parse("tr").expect(ERR_BACKEND_CHANGED);
 
                 if search_table.select(&select_rows).count() == 1 {
@@ -101,14 +115,11 @@ fn libg_search(search_term: &str) -> Vec<SearchResult> {
 
                 let row_iterator = search_table.select(&select_rows).skip(1); //Note: skip(1) skips the table header
 
-                let new_row_structs : Vec<_> = row_iterator.map(tr_to_search_result).collect();
+                let new_row_structs: Vec<_> = row_iterator.map(tr_to_search_result).collect();
                 // Concatenate to all_results
                 all_results.extend(new_row_structs);
             }
-            Ok(None) => {
-                return Vec::new();
-            }
-            Err(..) => {
+            None => {
                 return Vec::new();
             }
         }
@@ -116,15 +127,29 @@ fn libg_search(search_term: &str) -> Vec<SearchResult> {
         page += 1;
     }
 
-    return all_results;
+    all_results
 }
 
-fn libg_get_download(dl_page:&str) -> String {
-    let response = reqwest::blocking::get(dl_page).expect(ERR_BACKEND_CHANGED).error_for_status().expect(ERR_BACKEND_CHANGED).text().expect(ERR_BACKEND_CHANGED);
+fn libg_get_download(dl_page: &str) -> String {
+    let response = reqwest::blocking::get(dl_page)
+        .expect(ERR_BACKEND_CHANGED)
+        .error_for_status()
+        .expect(ERR_BACKEND_CHANGED)
+        .text()
+        .expect(ERR_BACKEND_CHANGED);
     let document = Html::parse_document(&response);
     let toplevel_selector = Selector::parse("#download").expect(ERR_BACKEND_CHANGED);
-    let toplevel_div = document.select(&toplevel_selector).next().expect(ERR_BACKEND_CHANGED);
-    return toplevel_div.descendent_elements().nth(2).expect(ERR_BACKEND_CHANGED).attr("href").expect(ERR_BACKEND_CHANGED).to_string();
+    let toplevel_div = document
+        .select(&toplevel_selector)
+        .next()
+        .expect(ERR_BACKEND_CHANGED);
+    return toplevel_div
+        .descendent_elements()
+        .nth(2)
+        .expect(ERR_BACKEND_CHANGED)
+        .attr("href")
+        .expect(ERR_BACKEND_CHANGED)
+        .to_string();
 }
 
 fn help() {
@@ -153,20 +178,19 @@ fn parse_args() -> String {
             io::stdout().flush().expect("Failed to flush stdout");
 
             read_string()
-        },
+        }
         _ => {
             // If command is -help, print the help
-            if args[1].to_lowercase() == "--help" || args[1].to_lowercase() == "-h"{
+            if args[1].to_lowercase() == "--help" || args[1].to_lowercase() == "-h" {
                 help();
                 exit(0);
-            }
-            else {
+            } else {
                 // Concatenate the search term
                 let mut search_term = String::new();
                 search_term.push_str(&args[1]);
-                for i in 2..args.len() {
-                    search_term.push_str(" ");
-                    search_term.push_str(&args[i]);
+                for item in args.iter().skip(2) {
+                    search_term.push(' ');
+                    search_term.push_str(item);
                 }
 
                 search_term
@@ -176,14 +200,18 @@ fn parse_args() -> String {
 }
 
 // Inspired by https://gist.github.com/giuliano-macedo/4d11d6b3bb003dba3a1b53f43d81b30d
-async fn download_search_result(client: &Client, search_result: &SearchResult, directory: PathBuf) -> Result<(), String> {
+async fn download_search_result(
+    client: &Client,
+    search_result: &SearchResult,
+    directory: PathBuf,
+) -> Result<(), String> {
     // Extract the download link
     let dl_page_clone = search_result.dl_page.clone();
 
     // Extract the download link asynchronously
-    let url = &task::spawn_blocking(move || {
-        libg_get_download(&dl_page_clone)
-    }).await.expect("Error while fetching download link");
+    let url = &task::spawn_blocking(move || libg_get_download(&dl_page_clone))
+        .await
+        .expect("Error while fetching download link");
 
     // Reqwest setup
     let res = client
@@ -204,26 +232,29 @@ async fn download_search_result(client: &Client, search_result: &SearchResult, d
     pb.set_message(format!("Downloading {}", url));
 
     // Combine directory and file name
-    let path = directory.join(sanitize_filename(&format!("{}.{}", search_result.title, search_result.file_format)));
+    let path = directory.join(sanitize_filename(&format!(
+        "{}.{}",
+        search_result.title, search_result.file_format
+    )));
     let path_string = path.to_str().unwrap();
 
-
     // download chunks
-    let mut file = File::create(path_string).or(Err(format!("Failed to create file '{}'", path_string)))?;
+    let mut file =
+        File::create(path_string).or(Err(format!("Failed to create file '{}'", path_string)))?;
     let mut downloaded: u64 = 0;
     let mut stream = res.bytes_stream();
 
     while let Some(item) = stream.next().await {
-        let chunk = item.or(Err(format!("Error while downloading file")))?;
+        let chunk = item.or(Err("Error while downloading file".to_string()))?;
         file.write_all(&chunk)
-            .or(Err(format!("Error while writing to file")))?;
+            .or(Err("Error while writing to file".to_string()))?;
         let new = min(downloaded + (chunk.len() as u64), total_size);
         downloaded = new;
         pb.set_position(new);
     }
 
     pb.finish_with_message(format!("Downloaded {} to {}", url, path_string));
-    return Ok(());
+    Ok(())
 }
 
 fn sanitize_filename(filename: &str) -> String {
@@ -239,45 +270,58 @@ fn sanitize_filename(filename: &str) -> String {
         sanitized.push('_');
     }
 
-    sanitized = sanitized.trim_end_matches(|c| c == '.' || c == ' ').to_string();
+    sanitized = sanitized
+        .trim_end_matches(|c| c == '.' || c == ' ')
+        .to_string();
 
     sanitized
 }
 
-fn stringify_search_results(results: &Vec<SearchResult>) -> Vec<String> {
+fn stringify_search_results(results: &[SearchResult]) -> Vec<String> {
     // Convert into string array
     let mut result_options = Vec::new();
 
     for (i, x) in results.iter().enumerate() {
         // Account for the fact that some books differentiate pages and pages with content
-        let page_count =
-            if x.pages.is_empty() || x.pages.starts_with('0') {
-                "".to_string()
-            } else if x.pages.contains('[') {
-                x.pages.split('[')
-                    .collect::<Vec<&str>>()
-                    .get(1)
-                    .unwrap()
-                    .replace("]", "")
-                    .to_string()
-            } else {
-                x.pages.to_string()
-            };
+        let page_count = if x.pages.is_empty() || x.pages.starts_with('0') {
+            "".to_string()
+        } else if x.pages.contains('[') {
+            x.pages
+                .split('[')
+                .collect::<Vec<&str>>()
+                .get(1)
+                .unwrap()
+                .replace(']', "")
+                .to_string()
+        } else {
+            x.pages.to_string()
+        };
 
         let page_info =
             // Correct pluralization
-            if page_count.len() > 0 {
-                if page_count.len() == 1 && page_count.starts_with("1") {
+            if !page_count.is_empty() {
+                if page_count.len() == 1 && page_count.starts_with('1') {
                     format!("{} page - ", page_count)
                 } else {
                     format!("{} pages - ", page_count)
                 }
             } else { String::new() };
 
-        let author = if x.author.len() == 0 { "Unknown author" } else { &x.author };
+        let author = if x.author.is_empty() {
+            "Unknown author"
+        } else {
+            &x.author
+        };
 
-        result_options.push(format!("{}. \"{}\" by {}, {} ({}{})",
-                                    i + 1, x.title, author, x.year, page_info, x.file_format));
+        result_options.push(format!(
+            "{}. \"{}\" by {}, {} ({}{})",
+            i + 1,
+            x.title,
+            author,
+            x.year,
+            page_info,
+            x.file_format
+        ));
     }
     result_options
 }
@@ -296,11 +340,10 @@ fn main() {
 
     let results = &libg_search(&search_term);
 
-    if results.len() == 0 {
+    if results.is_empty() {
         println!("No results found for search term: {}", search_term);
         exit(1);
-    }
-    else {
+    } else {
         let result_options = stringify_search_results(results);
 
         // Fuzzy select the desired result
@@ -314,7 +357,8 @@ fn main() {
         let selected_result = &results[selected];
 
         // Get current directory
-        let current_dir = env::current_dir().expect("Please run the program in a directory where you have write permissions.");
+        let current_dir = env::current_dir()
+            .expect("Please run the program in a directory where you have write permissions.");
 
         // Run the download_file function within the Tokio runtime
         let rt = Runtime::new().unwrap();
